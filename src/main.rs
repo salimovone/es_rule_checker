@@ -63,9 +63,19 @@ async fn main() {
         .and(db_filter.clone())
         .and_then(get_rules_handler);
 
-    let routes = add_rule.or(get_rules);
+    let delete_rules = warp::path("delete-rules")
+        .and(warp::delete())
+        .and(db_filter.clone())
+        .and_then(delete_rules_handler);
 
-    println!("[+] Server http://localhost:3030 da ishga tushdi");
+    let delete_rule_by_id = warp::path!("delete-rule" / String)
+        .and(warp::delete())
+        .and(db_filter.clone())
+        .and_then(delete_rule_by_id_handler);
+
+    let routes = add_rule.or(get_rules).or(delete_rules).or(delete_rule_by_id);
+
+    println!("[+] Server 3030 portda ishga tushdi");
 
     let result_store: ResultStore = Arc::new(Mutex::new(Vec::new()));
 
@@ -109,6 +119,37 @@ async fn get_rules_handler(db: SharedDb) -> Result<impl warp::Reply, warp::Rejec
 
     Ok(warp::reply::json(&rules))
 }
+
+
+async fn delete_rules_handler (db: SharedDb) -> Result<impl warp::Reply, warp::Rejection> {
+    db.clear().expect("[-] DB clear error");
+    println!("[+] Barcha qoida o'chirildi");
+    Ok(warp::reply::with_status("Barcha qoida o'chirildi", warp::http::StatusCode::OK))
+}
+
+async fn delete_rule_by_id_handler(id: String, db: SharedDb) -> Result<impl warp::Reply, warp::Rejection> {
+    match db.remove(id.as_bytes()) {
+        Ok(Some(_)) => {
+            println!("[+] Qoida o'chirildi: {}", id);
+            Ok(warp::reply::with_status(
+                format!("Qoida o'chirildi: {}", id),
+                warp::http::StatusCode::OK,
+            ))
+        }
+        Ok(None) => Ok(warp::reply::with_status(
+            format!("Qoida topilmadi: {}", id),
+            warp::http::StatusCode::NOT_FOUND,
+        )),
+        Err(e) => {
+            eprintln!("[-] DB error: {}", e);
+            Ok(warp::reply::with_status(
+                "DB xatolik".to_string(),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ))
+        }
+    }
+}
+
 
 //
 // ------ WORKER ISHI ------
