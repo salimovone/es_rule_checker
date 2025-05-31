@@ -25,15 +25,33 @@ type ResultStore = Arc<Mutex<Vec<RuleHit>>>;
 //
 // ------ MA'LUMOT TUZILMALARI ------
 //
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RuleData {
+    id: String,
+    title: String,
+    description: Option<String>,
+    author: Option<String>,
+    references: Option<Vec<String>>,
+    logsource: Option<serde_json::Value>,
+    status: Option<String>,
+    date: Option<String>,
+    level: Option<String>,
+    falsepositives: Option<Vec<String>>,
+    tags: Option<Vec<String>>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Rule {
     id: String,
-    query: serde_json::Value,
+    rule_query: serde_json::Value,
+    rule_data: RuleData,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct NewRule {
-    query: serde_json::Value,
+    rule_query: serde_json::Value,
+    rule_data: RuleData,
 }
 
 #[derive(Debug, Clone)]
@@ -107,7 +125,20 @@ async fn add_rule_handler(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let rule = Rule {
         id: Uuid::new_v4().to_string(),
-        query: new_rule.query,
+        rule_query: new_rule.rule_query,
+        rule_data: RuleData {
+            id: new_rule.rule_data.id,
+            title: new_rule.rule_data.title,
+            description: new_rule.rule_data.description,
+            author: new_rule.rule_data.author,
+            references: new_rule.rule_data.references,
+            logsource: new_rule.rule_data.logsource,
+            status: new_rule.rule_data.status,
+            date: new_rule.rule_data.date,
+            level: new_rule.rule_data.level,
+            falsepositives: new_rule.rule_data.falsepositives,
+            tags: new_rule.rule_data.tags,
+        }
     };
 
     db.insert(&rule.id, serde_json::to_vec(&rule).unwrap())
@@ -304,7 +335,7 @@ async fn handle_rule(
     match client
         .post(ES_URL)
         .basic_auth(ES_USER, Some(ES_PASS))
-        .json(&rule.query)
+        .json(&rule.rule_query)
         .send()
         .await
     {
@@ -344,10 +375,13 @@ async fn process_es_response(
 ) {
     // Natijani arrayga saqlash
     {
-        let mut store = result_store.lock().unwrap();
-        store.push(RuleHit {
-            rule_id: rule.id.clone(),
-            hits: json["hits"]["hits"].clone(),
-        });
+        let hits = json["hits"]["hits"].clone();
+        if hits.as_array().map_or(false, |arr| !arr.is_empty()) {
+            let mut store = result_store.lock().unwrap();
+            store.push(RuleHit {
+                rule_id: rule.id.clone(),
+                hits,
+            });
+        }
     }
 }
