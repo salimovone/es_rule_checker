@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use warp::Filter;
+use warp::Reply;
+
 
 //
 // ------ GLOBAL SOZLAMALAR ------
@@ -63,6 +65,12 @@ async fn main() {
         .and(db_filter.clone())
         .and_then(get_rules_handler);
 
+    let get_rule_by_id = warp::path!("rule" / String)
+    .and(warp::get())
+    .and(db_filter.clone())
+    .and_then(get_rule_by_id_handler);
+
+
     let delete_rules = warp::path("delete-rules")
         .and(warp::delete())
         .and(db_filter.clone())
@@ -73,7 +81,7 @@ async fn main() {
         .and(db_filter.clone())
         .and_then(delete_rule_by_id_handler);
 
-    let routes = add_rule.or(get_rules).or(delete_rules).or(delete_rule_by_id);
+    let routes = add_rule.or(get_rules).or(get_rule_by_id).or(delete_rules).or(delete_rule_by_id);
 
     println!("[+] Server 3030 portda ishga tushdi");
 
@@ -119,6 +127,54 @@ async fn get_rules_handler(db: SharedDb) -> Result<impl warp::Reply, warp::Rejec
 
     Ok(warp::reply::json(&rules))
 }
+
+
+async fn get_rule_by_id_handler(id: String, db: SharedDb) -> Result<warp::reply::Response, warp::Rejection> {
+    let response = match db.get(id.as_bytes()) {
+        Ok(Some(bytes)) => {
+            if let Ok(rule) = serde_json::from_slice::<Rule>(&bytes) {
+                println!("[+] Rule topildi: {}", id);
+                warp::reply::with_status(
+                    warp::reply::json(&rule),
+                    warp::http::StatusCode::OK,
+                ).into_response()
+            } else {
+                eprintln!("[-] JSON parse error for rule: {}", id);
+                let error_resp = serde_json::json!({
+                    "error": "Rule ni JSON ga parse qilib bo'lmadi"
+                });
+                warp::reply::with_status(
+                    warp::reply::json(&error_resp),
+                    warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ).into_response()
+            }
+        }
+        Ok(None) => {
+            println!("[-] Rule topilmadi: {}", id);
+            let error_resp = serde_json::json!({
+                "error": format!("Rule topilmadi: {}", id)
+            });
+            warp::reply::with_status(
+                warp::reply::json(&error_resp),
+                warp::http::StatusCode::NOT_FOUND,
+            ).into_response()
+        }
+        Err(e) => {
+            eprintln!("[-] DB error: {}", e);
+            let error_resp = serde_json::json!({
+                "error": "DB xatolik"
+            });
+            warp::reply::with_status(
+                warp::reply::json(&error_resp),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ).into_response()
+        }
+    };
+
+    Ok(response)
+}
+
+
 
 
 async fn delete_rules_handler (db: SharedDb) -> Result<impl warp::Reply, warp::Rejection> {

@@ -26,8 +26,8 @@
     After=network.target
 
     [Service]
-    WorkingDirectory=/home/ubuntu
-    ExecStart=/home/ubuntu/es_rule_checker
+    WorkingDirectory=/path/to/your_app_directory/
+    ExecStart=/path/to/your_app
     Restart=always
     User=ubuntu
     Environment=RUST_LOG=info
