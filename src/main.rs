@@ -8,7 +8,6 @@ use uuid::Uuid;
 use warp::Filter;
 use warp::Reply;
 
-
 //
 // ------ GLOBAL SOZLAMALAR ------
 //
@@ -84,10 +83,9 @@ async fn main() {
         .and_then(get_rules_handler);
 
     let get_rule_by_id = warp::path!("rule" / String)
-    .and(warp::get())
-    .and(db_filter.clone())
-    .and_then(get_rule_by_id_handler);
-
+        .and(warp::get())
+        .and(db_filter.clone())
+        .and_then(get_rule_by_id_handler);
 
     let delete_rules = warp::path("delete-rules")
         .and(warp::delete())
@@ -99,7 +97,11 @@ async fn main() {
         .and(db_filter.clone())
         .and_then(delete_rule_by_id_handler);
 
-    let routes = add_rule.or(get_rules).or(get_rule_by_id).or(delete_rules).or(delete_rule_by_id);
+    let routes = add_rule
+        .or(get_rules)
+        .or(get_rule_by_id)
+        .or(delete_rules)
+        .or(delete_rule_by_id);
 
     println!("[+] Server 3030 portda ishga tushdi");
 
@@ -138,7 +140,7 @@ async fn add_rule_handler(
             level: new_rule.rule_data.level,
             falsepositives: new_rule.rule_data.falsepositives,
             tags: new_rule.rule_data.tags,
-        }
+        },
     };
 
     db.insert(&rule.id, serde_json::to_vec(&rule).unwrap())
@@ -159,16 +161,16 @@ async fn get_rules_handler(db: SharedDb) -> Result<impl warp::Reply, warp::Rejec
     Ok(warp::reply::json(&rules))
 }
 
-
-async fn get_rule_by_id_handler(id: String, db: SharedDb) -> Result<warp::reply::Response, warp::Rejection> {
+async fn get_rule_by_id_handler(
+    id: String,
+    db: SharedDb,
+) -> Result<warp::reply::Response, warp::Rejection> {
     let response = match db.get(id.as_bytes()) {
         Ok(Some(bytes)) => {
             if let Ok(rule) = serde_json::from_slice::<Rule>(&bytes) {
                 println!("[+] Rule topildi: {}", id);
-                warp::reply::with_status(
-                    warp::reply::json(&rule),
-                    warp::http::StatusCode::OK,
-                ).into_response()
+                warp::reply::with_status(warp::reply::json(&rule), warp::http::StatusCode::OK)
+                    .into_response()
             } else {
                 eprintln!("[-] JSON parse error for rule: {}", id);
                 let error_resp = serde_json::json!({
@@ -177,7 +179,8 @@ async fn get_rule_by_id_handler(id: String, db: SharedDb) -> Result<warp::reply:
                 warp::reply::with_status(
                     warp::reply::json(&error_resp),
                     warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-                ).into_response()
+                )
+                .into_response()
             }
         }
         Ok(None) => {
@@ -188,7 +191,8 @@ async fn get_rule_by_id_handler(id: String, db: SharedDb) -> Result<warp::reply:
             warp::reply::with_status(
                 warp::reply::json(&error_resp),
                 warp::http::StatusCode::NOT_FOUND,
-            ).into_response()
+            )
+            .into_response()
         }
         Err(e) => {
             eprintln!("[-] DB error: {}", e);
@@ -198,23 +202,27 @@ async fn get_rule_by_id_handler(id: String, db: SharedDb) -> Result<warp::reply:
             warp::reply::with_status(
                 warp::reply::json(&error_resp),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ).into_response()
+            )
+            .into_response()
         }
     };
 
     Ok(response)
 }
 
-
-
-
-async fn delete_rules_handler (db: SharedDb) -> Result<impl warp::Reply, warp::Rejection> {
+async fn delete_rules_handler(db: SharedDb) -> Result<impl warp::Reply, warp::Rejection> {
     db.clear().expect("[-] DB clear error");
     println!("[+] Barcha qoida o'chirildi");
-    Ok(warp::reply::with_status("Barcha qoida o'chirildi", warp::http::StatusCode::OK))
+    Ok(warp::reply::with_status(
+        "Barcha qoida o'chirildi",
+        warp::http::StatusCode::OK,
+    ))
 }
 
-async fn delete_rule_by_id_handler(id: String, db: SharedDb) -> Result<impl warp::Reply, warp::Rejection> {
+async fn delete_rule_by_id_handler(
+    id: String,
+    db: SharedDb,
+) -> Result<impl warp::Reply, warp::Rejection> {
     match db.remove(id.as_bytes()) {
         Ok(Some(_)) => {
             println!("[+] Qoida o'chirildi: {}", id);
@@ -236,7 +244,6 @@ async fn delete_rule_by_id_handler(id: String, db: SharedDb) -> Result<impl warp
         }
     }
 }
-
 
 //
 // ------ WORKER ISHI ------
@@ -275,16 +282,20 @@ async fn run_worker_loop(db: SharedDb, semaphore: Arc<Semaphore>, result_store: 
 
         while let Some(_res) = tasks.next().await {}
 
-        println!("[!] Barcha qoida ishlov berildi: [{}]", chrono::Utc::now());
+        println!("[+] Barcha qoida ishlov berildi: [{}]", chrono::Utc::now());
 
         // === YANGI QISM: result_store dagi har bir rule uchun callback va ESdan o'chirish ===
         {
             let mut store = result_store.lock().unwrap();
             for rule_hit in store.iter() {
                 // 1. Callbackga yuborish
-                if rule_hit.hits.as_array().map_or(false, |arr| !arr.is_empty()) {
+                if rule_hit
+                    .hits
+                    .as_array()
+                    .map_or(false, |arr| !arr.is_empty())
+                {
                     let callback_body = serde_json::json!({
-                        "id": rule_hit.rule_id,
+                        "rule_id": rule_hit.rule_id,
                         "data": rule_hit.hits
                     });
                     // Asinxron yuborish uchun tokio::spawn ishlatamiz
@@ -297,21 +308,38 @@ async fn run_worker_loop(db: SharedDb, semaphore: Arc<Semaphore>, result_store: 
                     );
                     tokio::spawn(async move {
                         let _ = client.post(CALLBACK_URL).json(&callback_body).send().await;
-                        
+
                         // 2. ESdan o'chirish (masalan, har bir hit uchun _id bo'lsa)
                         if let Some(hits_arr) = hits.as_array() {
                             for hit in hits_arr {
                                 if let Some(id) = hit["_id"].as_str() {
                                     let index = hit["_index"].as_str().unwrap_or("default-index");
-                                    let url = format!(
-                                        "https://search-siemlog-rddlwektckldlou57enditbsqa.eu-north-1.es.amazonaws.com/{}/_doc/{}",
-                                        index, id
-                                    );
-                                    let _ = client
-                                        .delete(&url)
-                                        .basic_auth(ES_USER, Some(ES_PASS))
-                                        .send()
-                                        .await;
+                                    if index != "sigma_rules" {
+                                        let url = format!(
+                                            "https://search-siemlog-rddlwektckldlou57enditbsqa.eu-north-1.es.amazonaws.com/{}/_doc/{}",
+                                            index, id
+                                        );
+                                        let res = client
+                                            .delete(&url)
+                                            .basic_auth(ES_USER, Some(ES_PASS))
+                                            .send()
+                                            .await;
+                                        match res {
+                                            Ok(resp) => {
+                                                println!(
+                                                    "[+] Deleted: status={} message={}",
+                                                    resp.status(),
+                                                    resp.text().await.unwrap_or_default()
+                                                );
+                                            }
+                                            Err(e) => {
+                                                eprintln!(
+                                                    "[-] ESdan o'chirishda xatolik: index={} id={} error={}",
+                                                    index, id, e
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
