@@ -11,12 +11,18 @@
 
 2. Copy binary file to the system
     ```bash
-    sudo cp path/to/your_app /usr/local/bin/
+    sudo cp path/to/es_rule_checker /usr/local/bin/es_rule_checker/
+    ```
+
+    then make it executable
+
+    ```bash
+    sudo chmod +x /usr/local/bin/es_rule_checker/es_rule_checker
     ```
 
 3. Create systemd service file
     ```bash
-    sudo nano /etc/systemd/system/your_app.service
+    sudo nano /etc/systemd/system/es_rule_checker.service
     ```
 
 4. Add following code to that file
@@ -26,8 +32,8 @@
     After=network.target
 
     [Service]
-    WorkingDirectory=/path/to/your_app_directory/
-    ExecStart=/path/to/your_app
+    WorkingDirectory=/usr/local/bin/es_rule_checker/
+    ExecStart=/usr/local/bin/es_rule_checker/es_rule_checker
     Restart=always
     User=ubuntu
     Environment=RUST_LOG=info
@@ -43,11 +49,11 @@
     ```bash
     sudo systemctl daemon-reexec
     sudo systemctl daemon-reload
-    sudo systemctl enable your_app.service
-    sudo systemctl start your_app.service
+    sudo systemctl enable es_rule_checker.service
+    sudo systemctl start es_rule_checker.service
     ```
 
     Check if running
     ```bash
-    sudo systemctl status your_app.service
+    sudo systemctl status es_rule_checker.service
     ```
