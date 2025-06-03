@@ -240,7 +240,7 @@ dependencies = [
 
 [[package]]
 name = "es_rule_checker"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "chrono",
  "futures",

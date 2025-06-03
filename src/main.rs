@@ -12,8 +12,8 @@ use warp::Reply;
 // ------ GLOBAL SOZLAMALAR ------
 //
 const ES_URL: &str =
-    "https://search-siemlog-rddlwektckldlou57enditbsqa.eu-north-1.es.amazonaws.com/_search";
-const CALLBACK_URL: &str = "http://13.60.91.11:8000/api/v1/elastic/post-json/";
+    "https://search-siemlog-rddlwektckldlou57enditbsqa.eu-north-1.es.amazonaws.com";
+const CALLBACK_URL: &str = "http://localhost:8000/api/v1/elastic/post-json/";
 
 const ES_USER: &str = "sardor";
 const ES_PASS: &str = "Aws0000$";
@@ -284,7 +284,7 @@ async fn run_worker_loop(db: SharedDb, semaphore: Arc<Semaphore>, result_store: 
 
         println!("[+] Barcha qoida ishlov berildi: [{}]", chrono::Utc::now());
 
-        // === YANGI QISM: result_store dagi har bir rule uchun callback va ESdan o'chirish ===
+        // === result_store dagi har bir rule uchun callback va ESdan o'chirish ===
         {
             let mut store = result_store.lock().unwrap();
             for rule_hit in store.iter() {
@@ -316,7 +316,8 @@ async fn run_worker_loop(db: SharedDb, semaphore: Arc<Semaphore>, result_store: 
                                     let index = hit["_index"].as_str().unwrap_or("default-index");
                                     if index != "sigma_rules" {
                                         let url = format!(
-                                            "https://search-siemlog-rddlwektckldlou57enditbsqa.eu-north-1.es.amazonaws.com/{}/_doc/{}",
+                                            "{}/{}/_doc/{}",
+                                            ES_URL,
                                             index, id
                                         );
                                         let res = client
@@ -361,7 +362,7 @@ async fn handle_rule(
     result_store: ResultStore,
 ) {
     match client
-        .post(ES_URL)
+        .post( format!("{}/_search", ES_URL))
         .basic_auth(ES_USER, Some(ES_PASS))
         .json(&rule.rule_query)
         .send()
